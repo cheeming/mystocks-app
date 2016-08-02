@@ -1,6 +1,5 @@
 /**
- * Sample React Native App
- * https://github.com/facebook/react-native
+ * A simple app to track data about Malaysian stocks
  * @flow
  */
 
@@ -9,45 +8,124 @@ import {
   AppRegistry,
   StyleSheet,
   Text,
-  View
+  TextInput,
+  ListView,
+  Navigator,
+  View,
 } from 'react-native';
 
-class MyStocks extends Component {
-  render() {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.welcome}>
-          Welcome to React Native!
-        </Text>
-        <Text style={styles.instructions}>
-          To get started, edit index.ios.js
-        </Text>
-        <Text style={styles.instructions}>
-          Press Cmd+R to reload,{'\n'}
-          Cmd+D or shake for dev menu
-        </Text>
-      </View>
-    );
-  }
+import { createStore, combineReducers } from 'redux';
+import { Provider, connect } from 'react-redux';
+
+// Component to show list of stocks
+class StockListView extends Component {
+    render() {
+        const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+        return (
+            <View>
+                <TextInput
+                    onSubmitEditing={(e) => {
+                        let query = e.nativeEvent.text;
+                        if (typeof this.props.onSearch !== 'undefined') {
+                            this.props.onSearch(query);
+                        }
+                    }}
+                    style={{
+                        height: 20,
+                        borderColor: 'gray',
+                        borderWidth: 1
+                    }}
+                    />
+                <ListView
+                    dataSource={ds.cloneWithRows(this.props.stocks)}
+                    renderRow={(stock) => {
+                        return <Text>{stock.name}</Text>
+                    }} />
+            </View>
+        );
+    }
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5FCFF',
-  },
-  welcome: {
-    fontSize: 20,
-    textAlign: 'center',
-    margin: 10,
-  },
-  instructions: {
-    textAlign: 'center',
-    color: '#333333',
-    marginBottom: 5,
-  },
+// Redux Containers
+const StockListViewContainer = connect(
+    (state) => {
+        return {
+            stocks: state.stocks
+        }
+    },
+    (dispatch) => {
+        return {
+            onSearch: (query) => {
+                // NOTE: Do some API calls here
+                // Just preload some data here
+                let stocks = [
+                    {name: 'A1'},
+                    {name: 'B2'},
+                    {name: 'C3'},
+                ];
+                dispatch(getActionItem('STOCKS_LOAD', stocks));
+            }
+        }
+    }
+)(StockListView)
+
+// Main navigator component
+const getRoute = (routeId) => {
+    return {
+        id: routeId
+    };
+}
+
+const renderScene = (route, navigator) => {
+    return (
+        <View style={{
+                paddingTop: 10,  // required for iOS
+            }}>
+            <View
+                style={{
+                    padding: 6,
+                }}>
+                <Text style={{textAlign: 'center', backgroundColor: 'white'}}>MyStocks</Text>
+            </View>
+            <StockListViewContainer />
+        </View>
+    );
+}
+
+// Reducers
+const getActionItem = (type, data) => {
+    return {
+        type,
+        data
+    }
+}
+
+const stocks = (state=[], action) => {
+    switch (action.type) {
+        case 'STOCKS_LOAD':
+            return action.data;
+        default:
+            return state;
+    }
+}
+
+const myStocksApp = combineReducers({
+    stocks,
 });
+
+// The main entry point
+let store = createStore(myStocksApp);
+
+class MyStocks extends Component {
+    render() {
+        return (
+            <Provider store={store}>
+                <Navigator
+                    initialRoute={getRoute('main')}
+                    renderScene={renderScene} />
+            </Provider>
+        );
+    }
+}
 
 AppRegistry.registerComponent('MyStocks', () => MyStocks);
