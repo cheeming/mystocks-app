@@ -6,6 +6,7 @@
     "start": "node_modules/react-native/packager/packager.sh"
   },
   "dependencies": {
+    "fast-html-parser": "^1.0.1",
     "react": "15.2.1",
     "react-native": "^0.30.0",
     "react-redux": "^4.4.5",

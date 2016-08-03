@@ -17,6 +17,8 @@ import {
 import { createStore, combineReducers } from 'redux';
 import { Provider, connect } from 'react-redux';
 
+import HTMLParser from 'fast-html-parser';
+
 // Component to show list of stocks
 class StockListView extends Component {
     render() {
@@ -56,19 +58,26 @@ const StockListViewContainer = connect(
     (dispatch) => {
         return {
             onSearch: (query) => {
-                // TODO: Add code to testing fetching of data from API
-                fetch('http://facebook.github.io/react-native/movies.json')
-                    .then((response) => response.json())
+                let firstLetter = query[0];
+                fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
+                    .then((response) => {
+                        return response.json();
+                    })
                     .then((responseJson) => {
-                        let stocks = responseJson.movies
-                            .filter((i) => {
-                                let t = i.title.toLowerCase();
-                                let q = query.toLowerCase();
-                                return t.indexOf(q) >= 0;
-                            })
-                            .map((i) => {
-                                return {name: i.title};
-                            });
+                        let htmlRoot = HTMLParser.parse(responseJson.html);
+                        let tdList = htmlRoot.querySelectorAll('table.bm_dataTable tr td');
+                        let stocks = []
+                        tdList.forEach((o) => {
+                            let a = o.querySelector('a');
+                            if (a) {
+                                // check if it is the link to the stock code page
+                                if (a.attributes.href.indexOf('stock_code=') >= 0) {
+                                    stocks.push({
+                                        name: a.text
+                                    })
+                                }
+                            }
+                        });
                         dispatch(getActionItem('STOCKS_LOAD', stocks));
                     });
             }
