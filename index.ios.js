@@ -56,14 +56,21 @@ const StockListViewContainer = connect(
     (dispatch) => {
         return {
             onSearch: (query) => {
-                // NOTE: Do some API calls here
-                // Just preload some data here
-                let stocks = [
-                    {name: 'A1'},
-                    {name: 'B2'},
-                    {name: 'C3'},
-                ];
-                dispatch(getActionItem('STOCKS_LOAD', stocks));
+                // TODO: Add code to testing fetching of data from API
+                fetch('http://facebook.github.io/react-native/movies.json')
+                    .then((response) => response.json())
+                    .then((responseJson) => {
+                        let stocks = responseJson.movies
+                            .filter((i) => {
+                                let t = i.title.toLowerCase();
+                                let q = query.toLowerCase();
+                                return t.indexOf(q) >= 0;
+                            })
+                            .map((i) => {
+                                return {name: i.title};
+                            });
+                        dispatch(getActionItem('STOCKS_LOAD', stocks));
+                    });
             }
         }
     }
