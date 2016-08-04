@@ -24,8 +24,9 @@ import HTMLParser from 'fast-html-parser';
 class StockListView extends Component {
     render() {
         const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
-        let textInputHeight = 20;
+        let textInputHeight = 30;
         let listViewHeight = this.props.maxHeight - textInputHeight;
+        let fontSize = 18;
         return (
             <View style={{flex: 1}}>
                 <TextInput
@@ -38,15 +39,31 @@ class StockListView extends Component {
                     style={{
                         height: textInputHeight,
                         borderColor: 'gray',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        padding: 4,
+                        fontSize
                     }}
                     />
                 <ListView
                     dataSource={ds.cloneWithRows(this.props.stocks)}
+                    initialListSize={20}
                     renderRow={(stock) => {
-                        return <Text>{stock.name}</Text>
+                        return (
+                            <Text
+                                style={{
+                                    height: 30,
+                                    padding: 4,
+                                    fontSize
+                                }}>
+                                {stock.name}
+                            </Text>
+                        );
                     }}
-                    style={{flex: 1, height: listViewHeight, backgroundColor: '#eeeeee'}} />
+                    style={{
+                        flex: 1, 
+                        height: listViewHeight, 
+                        backgroundColor: '#eeeeee',
+                    }} />
 
             </View>
         );
@@ -104,17 +121,23 @@ class MainView extends Component {
         let {height, width} = Dimensions.get('window');
         let iOSTopBarHeight = 10;
         let listViewMaxHeight = height - iOSTopBarHeight - this.state.searchBoxHeight;
+        let headerFontSize = 20;
         return (
             <View style={{
                     paddingTop: iOSTopBarHeight,  // required for iOS
                 }}>
                 <View
                     style={{
-                        padding: 6,
+                        padding: 10,
                     }}
                     ref="header"
                     onLayout={(e) => this.setState({searchBoxHeight: e.nativeEvent.layout.height }) }>
-                    <Text style={{textAlign: 'center', backgroundColor: 'white'}}>MyStocks</Text>
+                    <Text style={{
+                            textAlign: 'center', 
+                            backgroundColor: 'white',
+                            fontSize: headerFontSize,
+                            fontWeight: 'bold',
+                        }}>MyStocks</Text>
                 </View>
                 <StockListViewContainer maxHeight={listViewMaxHeight} />
             </View>
