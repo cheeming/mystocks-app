@@ -1,3 +1,8 @@
+MyStocks App
+============
+Just a simple app to show the data from Bursa Malaysia website,
+because the website suck b*lls.
+
 Release Build
 -------------
 
