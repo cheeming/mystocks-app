@@ -12,6 +12,7 @@ import {
   ListView,
   Navigator,
   View,
+  Dimensions,
 } from 'react-native';
 
 import { createStore, combineReducers } from 'redux';
@@ -23,8 +24,10 @@ import HTMLParser from 'fast-html-parser';
 class StockListView extends Component {
     render() {
         const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+        let textInputHeight = 20;
+        let listViewHeight = this.props.maxHeight - textInputHeight;
         return (
-            <View>
+            <View style={{flex: 1}}>
                 <TextInput
                     onSubmitEditing={(e) => {
                         let query = e.nativeEvent.text;
@@ -33,7 +36,7 @@ class StockListView extends Component {
                         }
                     }}
                     style={{
-                        height: 20,
+                        height: textInputHeight,
                         borderColor: 'gray',
                         borderWidth: 1
                     }}
@@ -42,7 +45,9 @@ class StockListView extends Component {
                     dataSource={ds.cloneWithRows(this.props.stocks)}
                     renderRow={(stock) => {
                         return <Text>{stock.name}</Text>
-                    }} />
+                    }}
+                    style={{flex: 1, height: listViewHeight, backgroundColor: '#eeeeee'}} />
+
             </View>
         );
     }
@@ -85,6 +90,38 @@ const StockListViewContainer = connect(
     }
 )(StockListView)
 
+class MainView extends Component {
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            // this is the height returned during onLayout
+            // set it as default first
+            searchBoxHeight: 29,
+        };
+    }
+    render() {
+        let {height, width} = Dimensions.get('window');
+        let iOSTopBarHeight = 10;
+        let listViewMaxHeight = height - iOSTopBarHeight - this.state.searchBoxHeight;
+        return (
+            <View style={{
+                    paddingTop: iOSTopBarHeight,  // required for iOS
+                }}>
+                <View
+                    style={{
+                        padding: 6,
+                    }}
+                    ref="header"
+                    onLayout={(e) => this.setState({searchBoxHeight: e.nativeEvent.layout.height }) }>
+                    <Text style={{textAlign: 'center', backgroundColor: 'white'}}>MyStocks</Text>
+                </View>
+                <StockListViewContainer maxHeight={listViewMaxHeight} />
+            </View>
+        );
+    }
+}
+
 // Main navigator component
 const getRoute = (routeId) => {
     return {
@@ -94,17 +131,7 @@ const getRoute = (routeId) => {
 
 const renderScene = (route, navigator) => {
     return (
-        <View style={{
-                paddingTop: 10,  // required for iOS
-            }}>
-            <View
-                style={{
-                    padding: 6,
-                }}>
-                <Text style={{textAlign: 'center', backgroundColor: 'white'}}>MyStocks</Text>
-            </View>
-            <StockListViewContainer />
-        </View>
+        <MainView />
     );
 }
 
