@@ -86,6 +86,7 @@ const StockListViewContainer = connect(
                     console.log('WARNING: no query, so skip...');
                     return;
                 }
+                query = query.trim();
 
                 let firstLetter = query[0];
                 fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
@@ -123,7 +124,7 @@ const StockListViewContainer = connect(
     }
 )(StockListView)
 
-class MainView extends Component {
+class BaseView extends Component {
     render() {
         let iOSTopBarHeight = 10;
         let headerFontSize = 20;
@@ -134,26 +135,40 @@ class MainView extends Component {
                 }}>
                 <View
                     style={{
-                        padding: 10,
+                        backgroundColor: 'white',
                     }}>
                     <Text style={{
+                            margin: 10,
                             textAlign: 'center', 
-                            backgroundColor: 'white',
                             fontSize: headerFontSize,
                             fontWeight: 'bold',
-                        }}>MyStocks</Text>
+                        }}>{this.props.title}</Text>
                 </View>
-                <StockListViewContainer
-                    navigatorGoTo={this.props.navigatorGoTo} />
+                {this.props.content}
             </View>
+        );
+    }
+}
+
+class MainView extends Component {
+    render() {
+        let content = <StockListViewContainer
+                        navigatorGoTo={this.props.navigatorGoTo} />
+        return (
+            <BaseView title="MyStocks" content={content} />
         );
     }
 }
 
 class StockDetail extends Component {
     render() {
+        let content = (
+            <View style={{flex: 1, flexDirection: 'column', backgroundColor: 'white'}}>
+                <Text style={{fontSize: 12}}>StockDetail: { this.props.stock.stockCode }</Text>
+            </View>
+        );
         return (
-            <View><Text style={{fontSize: 12}}>StockDetail: { this.props.stock.name } { this.props.stock.stockCode }</Text></View>
+            <BaseView title={this.props.stock.name} content={content} />
         );
     }
 }
