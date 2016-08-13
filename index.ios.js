@@ -80,6 +80,11 @@ const StockListViewContainer = connect(
     (dispatch) => {
         return {
             onSearch: (query) => {
+                if (query.length <= 0) {
+                    console.log('WARNING: no query, so skip...');
+                    return;
+                }
+
                 let firstLetter = query[0];
                 fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
                     .then((response) => {
@@ -94,9 +99,12 @@ const StockListViewContainer = connect(
                             if (a) {
                                 // check if it is the link to the stock code page
                                 if (a.attributes.href.indexOf('stock_code=') >= 0) {
-                                    stocks.push({
-                                        name: a.text
-                                    })
+                                    var companyName = a.text.toUpperCase();
+                                    if (companyName.indexOf(query.toUpperCase()) >= 0) {
+                                        stocks.push({
+                                            name: companyName
+                                        })
+                                    }
                                 }
                             }
                         });
