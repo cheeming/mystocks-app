@@ -13,22 +13,23 @@ import {
   Navigator,
   View,
   Dimensions,
+  TouchableHighlight,
 } from 'react-native';
 
 import { createStore, combineReducers } from 'redux';
 import { Provider, connect } from 'react-redux';
 
 import HTMLParser from 'fast-html-parser';
+import URL from 'url-parse';
 
 // Component to show list of stocks
 class StockListView extends Component {
     render() {
         const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
         let textInputHeight = 30;
-        let listViewHeight = this.props.maxHeight - textInputHeight;
         let fontSize = 18;
         return (
-            <View style={{flex: 1}}>
+            <View style={{flex: 1, flexDirection: 'column'}}>
                 <TextInput
                     onSubmitEditing={(e) => {
                         let query = e.nativeEvent.text;
@@ -49,19 +50,20 @@ class StockListView extends Component {
                     initialListSize={20}
                     renderRow={(stock) => {
                         return (
-                            <Text
-                                style={{
-                                    height: 30,
-                                    padding: 4,
-                                    fontSize
-                                }}>
-                                {stock.name}
-                            </Text>
+                            <TouchableHighlight onPress={() => { this.props.onSelectStock(stock); }}>
+                                <Text
+                                    style={{
+                                        height: 30,
+                                        padding: 4,
+                                        fontSize
+                                    }}>
+                                    {stock.name}
+                                </Text>
+                            </TouchableHighlight>
                         );
                     }}
                     style={{
-                        flex: 1, 
-                        height: listViewHeight, 
+                        flex: 1,
                         backgroundColor: '#eeeeee',
                     }} />
 
@@ -77,7 +79,7 @@ const StockListViewContainer = connect(
             stocks: state.stocks
         }
     },
-    (dispatch) => {
+    (dispatch, ownProps) => {
         return {
             onSearch: (query) => {
                 if (query.length <= 0) {
@@ -99,10 +101,13 @@ const StockListViewContainer = connect(
                             if (a) {
                                 // check if it is the link to the stock code page
                                 if (a.attributes.href.indexOf('stock_code=') >= 0) {
-                                    var companyName = a.text.toUpperCase();
+                                    let companyName = a.text.toUpperCase();
                                     if (companyName.indexOf(query.toUpperCase()) >= 0) {
+                                        let url = new URL(a.attributes.href);
+                                        let query = URL.qs.parse(url.query);
                                         stocks.push({
-                                            name: companyName
+                                            name: companyName,
+                                            stockCode: query.stock_code,
                                         })
                                     }
                                 }
@@ -110,36 +115,27 @@ const StockListViewContainer = connect(
                         });
                         dispatch(getActionItem('STOCKS_LOAD', stocks));
                     });
+            },
+            onSelectStock: (stock) => {
+                ownProps.navigatorGoTo('stock_detail', stock)
             }
         }
     }
 )(StockListView)
 
 class MainView extends Component {
-    constructor(props) {
-        super(props);
-
-        this.state = {
-            // this is the height returned during onLayout
-            // set it as default first
-            searchBoxHeight: 29,
-        };
-    }
     render() {
-        let {height, width} = Dimensions.get('window');
         let iOSTopBarHeight = 10;
-        let listViewMaxHeight = height - iOSTopBarHeight - this.state.searchBoxHeight;
         let headerFontSize = 20;
         return (
             <View style={{
+                    flex: 1, flexDirection: 'column',
                     paddingTop: iOSTopBarHeight,  // required for iOS
                 }}>
                 <View
                     style={{
                         padding: 10,
-                    }}
-                    ref="header"
-                    onLayout={(e) => this.setState({searchBoxHeight: e.nativeEvent.layout.height }) }>
+                    }}>
                     <Text style={{
                             textAlign: 'center', 
                             backgroundColor: 'white',
@@ -147,23 +143,41 @@ class MainView extends Component {
                             fontWeight: 'bold',
                         }}>MyStocks</Text>
                 </View>
-                <StockListViewContainer maxHeight={listViewMaxHeight} />
+                <StockListViewContainer
+                    navigatorGoTo={this.props.navigatorGoTo} />
             </View>
         );
     }
 }
 
+class StockDetail extends Component {
+    render() {
+        return (
+            <View><Text style={{fontSize: 12}}>StockDetail: { this.props.stock.name } { this.props.stock.stockCode }</Text></View>
+        );
+    }
+}
+
 // Main navigator component
-const getRoute = (routeId) => {
+const getRoute = (routeId, data) => {
     return {
-        id: routeId
+        id: routeId,
+        data: data,
     };
 }
 
 const renderScene = (route, navigator) => {
-    return (
-        <MainView />
-    );
+    var goTo = (routeId, data) => {
+        navigator.push(getRoute(routeId, data));
+    };
+
+    switch (route.id) {
+        case 'stock_detail':
+            return <StockDetail stock={route.data} />;
+
+        case 'main':
+            return <MainView navigatorGoTo={goTo} />;
+    }
 }
 
 // Reducers
