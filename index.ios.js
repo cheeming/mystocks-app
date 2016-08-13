@@ -72,6 +72,66 @@ class StockListView extends Component {
     }
 }
 
+
+// Component used to show details for stocks
+class StockDetail extends Component {
+    render() {
+        let announcements = this.props.announcements;
+        if (typeof announcements === 'undefined') {
+            announcements = [];
+        }
+        let announcementsList = announcements.map((a) => a.date.trim() + ': ' + a.title.replace('  ', ' ').trim()).join('\n');
+        let content = (
+            <View style={{flex: 1, flexDirection: 'column', backgroundColor: 'white'}}>
+                <Text style={{fontSize: 12}}>StockDetail: { this.props.stockCode }</Text>
+                <Text>{ announcementsList }</Text>
+            </View>
+        );
+        return (
+            <BaseView title={this.props.stockName} content={content} />
+        );
+    }
+}
+
+
+class BaseView extends Component {
+    render() {
+        let iOSTopBarHeight = 10;
+        let headerFontSize = 20;
+        return (
+            <View style={{
+                    flex: 1, flexDirection: 'column',
+                    paddingTop: iOSTopBarHeight,  // required for iOS
+                }}>
+                <View
+                    style={{
+                        backgroundColor: 'white',
+                    }}>
+                    <Text style={{
+                            margin: 10,
+                            textAlign: 'center',
+                            fontSize: headerFontSize,
+                            fontWeight: 'bold',
+                        }}>{this.props.title}</Text>
+                </View>
+                {this.props.content}
+            </View>
+        );
+    }
+}
+
+
+class MainView extends Component {
+    render() {
+        let content = <StockListViewContainer
+                        navigatorGoTo={this.props.navigatorGoTo} />
+        return (
+            <BaseView title="MyStocks" content={content} />
+        );
+    }
+}
+
+
 // Redux Containers
 const StockListViewContainer = connect(
     (state) => {
@@ -118,77 +178,82 @@ const StockListViewContainer = connect(
                     });
             },
             onSelectStock: (stock) => {
-                ownProps.navigatorGoTo('stock_detail', stock)
+                dispatch(getActionItem('STOCK_DETAIL_LOAD', Object.assign({}, stock)));
+                ownProps.navigatorGoTo('stock_detail');
+
+                // load the stock detail data
+                fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + stock.stockCode)
+                    .then((htmlRoot) => {
+                        let announcements = []
+                        let trList = htmlRoot.querySelectorAll('table.bm_dataTable tr');
+                        trList.forEach((tr) => {
+                            let tdList = tr.querySelectorAll('td');
+                            if (tdList.length === 4) {
+                                announcements.push({
+                                    date: tdList[1].text,
+                                    title: tdList[3].text,
+                                })
+                            }
+                        });
+                        dispatch(
+                            getActionItem('STOCK_DETAIL_LOAD',
+                                          Object.assign({announcements: announcements}, stock))
+                        );
+                    })
             }
         }
     }
 )(StockListView)
 
-class BaseView extends Component {
-    render() {
-        let iOSTopBarHeight = 10;
-        let headerFontSize = 20;
-        return (
-            <View style={{
-                    flex: 1, flexDirection: 'column',
-                    paddingTop: iOSTopBarHeight,  // required for iOS
-                }}>
-                <View
-                    style={{
-                        backgroundColor: 'white',
-                    }}>
-                    <Text style={{
-                            margin: 10,
-                            textAlign: 'center', 
-                            fontSize: headerFontSize,
-                            fontWeight: 'bold',
-                        }}>{this.props.title}</Text>
-                </View>
-                {this.props.content}
-            </View>
-        );
+
+const StockDetailContainer = connect(
+    (state) => {
+        return {
+            stockName: state.stockDetail.name,
+            stockCode: state.stockDetail.stockCode,
+            announcements: state.stockDetail.announcements,
+        }
+    },
+    (dispatch, ownProps) => {
+        return {
+        }
     }
+)(StockDetail)
+
+
+// Networking Utilities
+function fetchDataWithHtml(url) {
+    return new Promise(function(resolve, reject) {
+        fetch(url)
+            .then((response) => {
+                return response.json();
+            })
+            .then((responseJson) => {
+                let htmlRoot = HTMLParser.parse(responseJson.html);
+                resolve(htmlRoot);
+            })
+            .catch((error) => {
+                reject(error);
+            });
+    });
 }
 
-class MainView extends Component {
-    render() {
-        let content = <StockListViewContainer
-                        navigatorGoTo={this.props.navigatorGoTo} />
-        return (
-            <BaseView title="MyStocks" content={content} />
-        );
-    }
-}
-
-class StockDetail extends Component {
-    render() {
-        let content = (
-            <View style={{flex: 1, flexDirection: 'column', backgroundColor: 'white'}}>
-                <Text style={{fontSize: 12}}>StockDetail: { this.props.stock.stockCode }</Text>
-            </View>
-        );
-        return (
-            <BaseView title={this.props.stock.name} content={content} />
-        );
-    }
-}
 
 // Main navigator component
-const getRoute = (routeId, data) => {
+const getRoute = (routeId) => {
     return {
         id: routeId,
-        data: data,
     };
 }
 
 const renderScene = (route, navigator) => {
-    var goTo = (routeId, data) => {
-        navigator.push(getRoute(routeId, data));
+    var goTo = (routeId) => {
+        navigator.push(getRoute(routeId));
     };
 
     switch (route.id) {
         case 'stock_detail':
-            return <StockDetail stock={route.data} />;
+            return <StockDetailContainer />;
 
         case 'main':
             return <MainView navigatorGoTo={goTo} />;
@@ -212,8 +277,19 @@ const stocks = (state=[], action) => {
     }
 }
 
+const stockDetail = (state={}, action) => {
+    switch (action.type) {
+        case 'STOCK_DETAIL_LOAD':
+            return action.data;
+        default:
+            return state;
+    }
+}
+
+
 const myStocksApp = combineReducers({
     stocks,
+    stockDetail,
 });
 
 // The main entry point
