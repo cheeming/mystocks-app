@@ -33,6 +33,7 @@ class StockListView extends Component {
         return (
             <View style={{flex: 1, flexDirection: 'column'}}>
                 <TextInput
+                    placeholder="Enter Company Name..."
                     onSubmitEditing={(e) => {
                         let query = e.nativeEvent.text;
                         if (typeof this.props.onSearch !== 'undefined') {
@@ -79,9 +80,9 @@ class StockListView extends Component {
 class StockDetail extends Component {
     render() {
         let content = (
-            <View style={{flex: 1, flexDirection: 'column', backgroundColor: 'white'}}>
+            <View style={{flex: 1, flexDirection: 'column'}}>
                 <View style={{flex: 0, flexDirection: 'column', alignItems: 'center' }}>
-                    <Text style={{fontSize: 12, margin: 5}}>Stock Code: { this.props.stockCode }</Text>
+                    <Text style={{fontSize: 12, margin: 2}}>Stock Code: { this.props.stockCode }</Text>
                 </View>
                 <AnnouncementList announcements={this.props.announcements} />
             </View>
@@ -122,19 +123,17 @@ class AnnouncementList extends Component {
 
 class BaseView extends Component {
     render() {
-        let iOSTopBarHeight = 10;
+        let iOSTopBarHeight = 20;
         let headerFontSize = 20;
         return (
             <View style={{
                     flex: 1, flexDirection: 'column',
                     paddingTop: iOSTopBarHeight,  // required for iOS
+                    backgroundColor: 'white',
                 }}>
-                <View
-                    style={{
-                        backgroundColor: 'white',
-                    }}>
+                <View>
                     <Text style={{
-                            margin: 10,
+                            padding: 10,
                             textAlign: 'center',
                             fontSize: headerFontSize,
                             fontWeight: 'bold',
