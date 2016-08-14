@@ -23,9 +23,11 @@ import HTMLParser from 'fast-html-parser';
 import URL from 'url-parse';
 
 // Component to show list of stocks
+
+const DS = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+
 class StockListView extends Component {
     render() {
-        const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
         let textInputHeight = 30;
         let fontSize = 18;
         return (
@@ -46,7 +48,7 @@ class StockListView extends Component {
                     }}
                     />
                 <ListView
-                    dataSource={ds.cloneWithRows(this.props.stocks)}
+                    dataSource={DS.cloneWithRows(this.props.stocks)}
                     initialListSize={20}
                     renderRow={(stock) => {
                         return (
@@ -76,19 +78,43 @@ class StockListView extends Component {
 // Component used to show details for stocks
 class StockDetail extends Component {
     render() {
-        let announcements = this.props.announcements;
-        if (typeof announcements === 'undefined') {
-            announcements = [];
-        }
-        let announcementsList = announcements.map((a) => a.date.trim() + ': ' + a.title.replace('  ', ' ').trim()).join('\n');
         let content = (
             <View style={{flex: 1, flexDirection: 'column', backgroundColor: 'white'}}>
-                <Text style={{fontSize: 12}}>StockDetail: { this.props.stockCode }</Text>
-                <Text>{ announcementsList }</Text>
+                <View style={{flex: 0, flexDirection: 'column', alignItems: 'center' }}>
+                    <Text style={{fontSize: 12, margin: 5}}>Stock Code: { this.props.stockCode }</Text>
+                </View>
+                <AnnouncementList announcements={this.props.announcements} />
             </View>
         );
         return (
             <BaseView title={this.props.stockName} content={content} />
+        );
+    }
+}
+
+
+class AnnouncementList extends Component {
+    render() {
+        let announcements = this.props.announcements;
+        if (typeof announcements === 'undefined') {
+            announcements = [];
+        }
+        return (
+            <ListView
+                dataSource={DS.cloneWithRows(announcements)}
+                initialListSize={20}
+                renderRow={(announcement) => {
+                    return (
+                        <View style={{flex: 0, flexDirection: 'row', margin: 4}}>
+                            <View style={{width: 100, alignItems: 'center' }}><Text>{announcement.date}</Text></View>
+                            <View style={{flex: 1}}><Text>{announcement.title}</Text></View>
+                        </View>
+                    );
+                }}
+                style={{
+                    flex: 1,
+                    backgroundColor: '#eeeeee',
+                }} />
         );
     }
 }
@@ -189,9 +215,11 @@ const StockListViewContainer = connect(
                         trList.forEach((tr) => {
                             let tdList = tr.querySelectorAll('td');
                             if (tdList.length === 4) {
+                                let date = tdList[1].text.trim();
+                                let title = tdList[3].text.replace('  ', ' ').trim();
                                 announcements.push({
-                                    date: tdList[1].text,
-                                    title: tdList[3].text,
+                                    date: date,
+                                    title: title,
                                 })
                             }
                         });
