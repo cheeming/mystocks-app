@@ -14,6 +14,7 @@ import {
   View,
   Dimensions,
   TouchableHighlight,
+  ActivityIndicator,
 } from 'react-native';
 
 import { createStore, combineReducers } from 'redux';
@@ -77,18 +78,94 @@ class StockListView extends Component {
 
 
 // Component used to show details for stocks
-class StockDetail extends Component {
+class BaseView extends Component {
+    constructor(props) {
+        super(props);
+        props.enableProgress = this.enableProgress
+        this.state = {
+            showProgress: false,
+        }
+    }
+
+    enableProgress(flag) {
+        this.setState({showProgress: flag});
+    }
+
     render() {
-        let content = (
+        let iOSTopBarHeight = 20;
+        let headerFontSize = 20;
+
+        // setup progress box
+        let { width, height } = Dimensions.get('window');
+        let progressBoxWidth = 100;
+        let progressBoxHeight = 100;
+        let progressBox = null
+        if (this.state.showProgress) {
+            progressBox = (
+                <ActivityIndicator
+                    style={{
+                            position: 'absolute',
+                            top: (height/2) - (progressBoxHeight/2),
+                            left: (width/2) - (progressBoxWidth/2),
+                            width: progressBoxWidth, height: progressBoxHeight,
+                            borderRadius: 20,
+                            backgroundColor: '#ffffffee',
+                            }}
+                    animating={this.state.showProgress} />
+            );
+        }
+
+        // NOTE: Implement the following to customise your view
+        let title = this.getTitle();
+        let content = this.getContent();
+
+        return (
+            <View style={{
+                    flex: 1, flexDirection: 'column',
+                    paddingTop: iOSTopBarHeight,  // required for iOS
+                    backgroundColor: 'white',
+                }}>
+                <View>
+                    <Text style={{
+                            padding: 10,
+                            textAlign: 'center',
+                            fontSize: headerFontSize,
+                            fontWeight: 'bold',
+                        }}>{title}</Text>
+                </View>
+
+                {content}
+
+                {progressBox}
+            </View>
+        );
+    }
+}
+
+
+class StockDetail extends BaseView {
+    constructor(props) {
+        super(props);
+    }
+
+    componentWillMount() {
+        if (typeof this.props.onLoadData === 'function') {
+            this.props.onLoadData(this.props.stockCode, this)
+        }
+    }
+
+    getTitle() {
+        return this.props.stockName;
+    }
+
+    getContent() {
+        return (
             <View style={{flex: 1, flexDirection: 'column'}}>
                 <View style={{flex: 0, flexDirection: 'column', alignItems: 'center' }}>
                     <Text style={{fontSize: 12, margin: 2}}>Stock Code: { this.props.stockCode }</Text>
                 </View>
                 <AnnouncementList announcements={this.props.announcements} />
             </View>
-        );
-        return (
-            <BaseView title={this.props.stockName} content={content} />
         );
     }
 }
@@ -121,37 +198,16 @@ class AnnouncementList extends Component {
 }
 
 
-class BaseView extends Component {
-    render() {
-        let iOSTopBarHeight = 20;
-        let headerFontSize = 20;
-        return (
-            <View style={{
-                    flex: 1, flexDirection: 'column',
-                    paddingTop: iOSTopBarHeight,  // required for iOS
-                    backgroundColor: 'white',
-                }}>
-                <View>
-                    <Text style={{
-                            padding: 10,
-                            textAlign: 'center',
-                            fontSize: headerFontSize,
-                            fontWeight: 'bold',
-                        }}>{this.props.title}</Text>
-                </View>
-                {this.props.content}
-            </View>
-        );
+class StockList extends BaseView {
+    getTitle() {
+        return 'MyStocks';
     }
-}
 
-
-class MainView extends Component {
-    render() {
-        let content = <StockListViewContainer
-                        navigatorGoTo={this.props.navigatorGoTo} />
+    getContent() {
         return (
-            <BaseView title="MyStocks" content={content} />
+            <StockListViewContainer
+                navigatorGoTo={this.props.navigatorGoTo}
+                enableProgress={this.enableProgress.bind(this)} />
         );
     }
 }
@@ -174,8 +230,10 @@ const StockListViewContainer = connect(
                 query = query.trim();
 
                 let firstLetter = query[0];
+                ownProps.enableProgress(true);
                 fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
                     .then((response) => {
+                        ownProps.enableProgress(false);
                         return response.json();
                     })
                     .then((responseJson) => {
@@ -200,33 +258,14 @@ const StockListViewContainer = connect(
                             }
                         });
                         dispatch(getActionItem('STOCKS_LOAD', stocks));
+                    })
+                    .catch((error) => {
+                        ownProps.enableProgress(false);
                     });
             },
             onSelectStock: (stock) => {
-                dispatch(getActionItem('STOCK_DETAIL_LOAD', Object.assign({}, stock)));
+                dispatch(getActionItem('STOCK_DETAIL_INIT', Object.assign({}, stock)));
                 ownProps.navigatorGoTo('stock_detail');
-
-                // load the stock detail data
-                fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + stock.stockCode)
-                    .then((htmlRoot) => {
-                        let announcements = []
-                        let trList = htmlRoot.querySelectorAll('table.bm_dataTable tr');
-                        trList.forEach((tr) => {
-                            let tdList = tr.querySelectorAll('td');
-                            if (tdList.length === 4) {
-                                let date = tdList[1].text.trim();
-                                let title = tdList[3].text.replace('  ', ' ').trim();
-                                announcements.push({
-                                    date: date,
-                                    title: title,
-                                })
-                            }
-                        });
-                        dispatch(
-                            getActionItem('STOCK_DETAIL_LOAD',
-                                          Object.assign({announcements: announcements}, stock))
-                        );
-                    })
             }
         }
     }
@@ -243,6 +282,35 @@ const StockDetailContainer = connect(
     },
     (dispatch, ownProps) => {
         return {
+            onLoadData: (stockCode, component) => {
+                // load the stock detail data
+                component.enableProgress(true);
+                fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + stockCode)
+                    .then((htmlRoot) => {
+                        component.enableProgress(false);
+                        let announcements = []
+                        let trList = htmlRoot.querySelectorAll('table.bm_dataTable tr');
+                        trList.forEach((tr) => {
+                            let tdList = tr.querySelectorAll('td');
+                            if (tdList.length === 4) {
+                                let date = tdList[1].text.trim();
+                                let title = tdList[3].text.replace('  ', ' ').trim();
+                                announcements.push({
+                                    date: date,
+                                    title: title,
+                                })
+                            }
+                        });
+                        dispatch(
+                            getActionItem('STOCK_DETAIL_LOAD', {
+                                announcements: announcements,
+                            })
+                        );
+                    })
+                    .catch((error) => {
+                        component.enableProgress(false);
+                    });
+            }
         }
     }
 )(StockDetail)
@@ -251,8 +319,10 @@ const StockDetailContainer = connect(
 // Networking Utilities
 function fetchDataWithHtml(url) {
     return new Promise(function(resolve, reject) {
+        console.log('FETCHING: ', url);
         fetch(url)
             .then((response) => {
+                console.log('DONE: ', url);
                 return response.json();
             })
             .then((responseJson) => {
@@ -260,6 +330,7 @@ function fetchDataWithHtml(url) {
                 resolve(htmlRoot);
             })
             .catch((error) => {
+                console.log('ERROR: ', url, error);
                 reject(error);
             });
     });
@@ -274,7 +345,7 @@ const getRoute = (routeId) => {
 }
 
 const renderScene = (route, navigator) => {
-    var goTo = (routeId) => {
+    let goTo = (routeId) => {
         navigator.push(getRoute(routeId));
     };
 
@@ -283,7 +354,7 @@ const renderScene = (route, navigator) => {
             return <StockDetailContainer />;
 
         case 'main':
-            return <MainView navigatorGoTo={goTo} />;
+            return <StockList navigatorGoTo={goTo} />;
     }
 }
 
@@ -306,8 +377,11 @@ const stocks = (state=[], action) => {
 
 const stockDetail = (state={}, action) => {
     switch (action.type) {
-        case 'STOCK_DETAIL_LOAD':
+        case 'STOCK_DETAIL_INIT':
             return action.data;
+        case 'STOCK_DETAIL_LOAD':
+            state = Object.assign({announcements: action.data.announcements}, state);
+            return state;
         default:
             return state;
     }
