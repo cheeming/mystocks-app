@@ -11,6 +11,9 @@
     "react-native": "^0.30.0",
     "react-redux": "^4.4.5",
     "redux": "^3.5.2",
+    "redux-storage": "^4.1.1",
+    "redux-storage-engine-reactnativeasyncstorage": "^1.0.2",
+    "redux-storage-merger-simple": "^1.0.3",
     "url-parse": "^1.1.1"
   }
 }

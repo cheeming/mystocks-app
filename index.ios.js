@@ -17,11 +17,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-import { createStore, combineReducers } from 'redux';
+import { createStore, combineReducers, applyMiddleware } from 'redux';
 import { Provider, connect } from 'react-redux';
 
 import HTMLParser from 'fast-html-parser';
 import URL from 'url-parse';
+
+import * as storage from 'redux-storage';
+import createEngine from 'redux-storage-engine-reactnativeasyncstorage';
 
 // Component to show list of stocks
 
@@ -34,6 +37,7 @@ class StockListView extends Component {
         return (
             <View style={{flex: 1, flexDirection: 'column'}}>
                 <TextInput
+                    defaultValue={this.props.query}
                     placeholder="Enter Company Name..."
                     onSubmitEditing={(e) => {
                         let query = e.nativeEvent.text;
@@ -217,7 +221,8 @@ class StockList extends BaseView {
 const StockListViewContainer = connect(
     (state) => {
         return {
-            stocks: state.stocks
+            stocks: state.stocks,
+            query: state.query,
         }
     },
     (dispatch, ownProps) => {
@@ -228,6 +233,7 @@ const StockListViewContainer = connect(
                     return;
                 }
                 query = query.trim();
+                dispatch(getActionItem('STOCK_SEARCH', query));
 
                 let firstLetter = query[0];
                 ownProps.enableProgress(true);
@@ -366,7 +372,16 @@ const getActionItem = (type, data) => {
     }
 }
 
-const stocks = (state=[], action) => {
+const query = (state='', action) => {
+    switch (action.type) {
+        case 'STOCK_SEARCH':
+            return action.data;
+        default:
+            return state;
+    }
+}
+
+const stocks = (state={}, action) => {
     switch (action.type) {
         case 'STOCKS_LOAD':
             return action.data;
@@ -387,15 +402,22 @@ const stockDetail = (state={}, action) => {
     }
 }
 
-
-const myStocksApp = combineReducers({
+const myStocksApp = storage.reducer(combineReducers({
+    query,
     stocks,
     stockDetail,
-});
+}));
+
+// setup persistance for store
+const engine = createEngine('my-stocks-app');
+const middleware = storage.createMiddleware(engine);
+const createStoreWithMiddleware = applyMiddleware(middleware)(createStore);
+const store = createStoreWithMiddleware(myStocksApp);
+
+const load = storage.createLoader(engine);
+load(store);
 
 // The main entry point
-let store = createStore(myStocksApp);
-
 class MyStocks extends Component {
     render() {
         return (
