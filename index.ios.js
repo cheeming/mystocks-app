@@ -33,6 +33,19 @@ import filter from 'redux-storage-decorator-filter';
 const DS = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
 
 class StockListView extends Component {
+    componentWillMount() {
+        if (typeof this.props.onLoadData === 'function') {
+            this.props.onEnableProgress(true);
+            this.props.onLoadData()
+                .then(() => {
+                    this.props.onEnableProgress(false);
+                })
+                .catch(() => {
+                    this.props.onEnableProgress(false);
+                });
+        }
+    }
+
     render() {
         let textInputHeight = 30;
         let fontSize = 18;
@@ -76,7 +89,7 @@ class StockListView extends Component {
                                         padding: 4,
                                         fontSize
                                     }}>
-                                    {stock.name}
+                                    {stock.stockCode}: {stock.name}
                                 </Text>
                             </TouchableHighlight>
                         );
@@ -215,7 +228,7 @@ class AnnouncementList extends Component {
 
 class StockList extends BaseView {
     getTitle() {
-        return 'MyStocks';
+        return 'MY Stocks';
     }
 
     getContent() {
@@ -264,8 +277,33 @@ const StockListViewContainer = connect(
     },
     (dispatch, ownProps) => {
         return {
+            onLoadData: () => {
+                return new Promise((resolve, reject) => {
+                    let url = 'https://www.bursamalaysia.com/searchbox_data.json';
+                    fetch(url)
+                        .then((response) => {
+                            return response.json();
+                        })
+                        .then((responseJson) => {
+                            let allStocksInfo = responseJson[0];
+                            let allStocks = allStocksInfo.map((o) => {
+                                return {
+                                    name: o.full_name,
+                                    stockCode: o.id,
+                                };
+                            });
+                            dispatch(getActionItem('ALL_STOCKS_LOAD', {ALL: allStocks}));
+
+                            resolve();
+                        })
+                        .catch((error) => {
+                            console.log('ERROR: ', url, error);
+                            reject();
+                        });
+                });
+            },
             onSearch: (query, allStocksCached) => {
-                return new Promise( (resolve, reject) => {
+                return new Promise((resolve, reject) => {
                     if (query.length <= 0) {
                         console.log('WARNING: no query, so skip...');
                         reject();
@@ -274,62 +312,20 @@ const StockListViewContainer = connect(
                     query = query.trim();
                     dispatch(getActionItem('STOCK_SEARCH', query));
 
-                    let firstLetter = query[0];
-
-                    let _filterStocks = (_allStocks) => {
+                    // search from cache first
+                    if (allStocksCached.hasOwnProperty('ALL')) {
                         // show only results that match query
-                        let stocks = _allStocks.filter( (stockInfo) => {
+                        let stocks = allStocksCached.ALL.filter((stockInfo) => {
                             return stockInfo.name.indexOf(query.toUpperCase()) >= 0;
                         });
                         dispatch(getActionItem('STOCKS_LOAD', stocks));
-                    };
-
-                    // search from cache first
-                    if (allStocksCached.hasOwnProperty(firstLetter)) {
-
-                        _filterStocks(allStocksCached[firstLetter]);
-
                         resolve();
                         return;
+                    } else {
+                        console.log('WARNING: No cached data...');
+                        reject();
+                        return;
                     }
-
-                    fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
-                        .then((response) => {
-                            return response.json();
-                        })
-                        .then((responseJson) => {
-                            // extract company data from returned HTML
-                            let htmlRoot = HTMLParser.parse(responseJson.html);
-                            let tdList = htmlRoot.querySelectorAll('table.bm_dataTable tr td');
-                            let allStocks = [];
-                            tdList.forEach((o) => {
-                                let a = o.querySelector('a');
-                                if (a) {
-                                    // check if it is the link to the stock code page
-                                    if (a.attributes.href.indexOf('stock_code=') >= 0) {
-                                        let companyName = a.text.toUpperCase();
-                                        let url = new URL(a.attributes.href);
-                                        let urlQuery = URL.qs.parse(url.query);
-                                        let stockInfo = {
-                                            name: companyName,
-                                            stockCode: urlQuery.stock_code,
-                                        };
-                                        allStocks.push(stockInfo);
-
-                                    }
-                                }
-                            });
-                            let allStocksData = {};
-                            allStocksData[firstLetter] = allStocks;
-                            dispatch(getActionItem('ALL_STOCKS_LOAD', allStocksData));
-
-                            _filterStocks(allStocks);
-
-                            resolve();
-                        })
-                        .catch((error) => {
-                            reject();
-                        });
                 });
             },
             onSelectStock: (stock) => {
