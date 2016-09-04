@@ -37,6 +37,7 @@ class StockListView extends Component {
         return (
             <View style={{flex: 1, flexDirection: 'column'}}>
                 <TextInput
+                    autoCorrect={false}
                     defaultValue={this.props.query}
                     placeholder="Enter Company Name..."
                     onSubmitEditing={(e) => {
@@ -54,6 +55,7 @@ class StockListView extends Component {
                     }}
                     />
                 <ListView
+                    enableEmptySections={true}
                     dataSource={DS.cloneWithRows(this.props.stocks)}
                     initialListSize={20}
                     renderRow={(stock) => {
@@ -85,14 +87,6 @@ class StockListView extends Component {
 class BaseView extends Component {
     constructor(props) {
         super(props);
-        props.enableProgress = this.enableProgress
-        this.state = {
-            showProgress: false,
-        }
-    }
-
-    enableProgress(flag) {
-        this.setState({showProgress: flag});
     }
 
     render() {
@@ -104,7 +98,7 @@ class BaseView extends Component {
         let progressBoxWidth = 100;
         let progressBoxHeight = 100;
         let progressBox = null
-        if (this.state.showProgress) {
+        if (this.props.showProgress) {
             progressBox = (
                 <ActivityIndicator
                     style={{
@@ -115,7 +109,7 @@ class BaseView extends Component {
                             borderRadius: 20,
                             backgroundColor: '#ffffffee',
                             }}
-                    animating={this.state.showProgress} />
+                    animating={this.props.showProgress} />
             );
         }
 
@@ -152,9 +146,16 @@ class StockDetail extends BaseView {
         super(props);
     }
 
-    componentWillMount() {
+    componentDidMount() {
         if (typeof this.props.onLoadData === 'function') {
-            this.props.onLoadData(this.props.stockCode, this)
+            this.props.onEnableProgress(true);
+            this.props.onLoadData(this.props.stockCode)
+                .then(() => {
+                    this.props.onEnableProgress(false);
+                })
+                .catch(() => {
+                    this.props.onEnableProgress(false);
+                });
         }
     }
 
@@ -183,6 +184,7 @@ class AnnouncementList extends Component {
         }
         return (
             <ListView
+                enableEmptySections={true}
                 dataSource={DS.cloneWithRows(announcements)}
                 initialListSize={20}
                 renderRow={(announcement) => {
@@ -211,18 +213,43 @@ class StockList extends BaseView {
         return (
             <StockListViewContainer
                 navigatorGoTo={this.props.navigatorGoTo}
-                enableProgress={this.enableProgress.bind(this)} />
+                onEnableProgress={this.props.onEnableProgress.bind(this)} />
         );
     }
 }
 
 
+// Reusable utils for Redux Containers
+const commonMapStateToProps = (name, state) => {
+    return {
+        showProgress: state.base['showProgress_' + name],
+    };
+}
+
+const commonMapDispatchToProps = (name, dispatch, ownProps) => {
+    return {
+        onEnableProgress: (flag) => {
+            dispatch(getActionItem('ENABLE_PROGRESS', {name, flag}));
+        }
+    };
+}
+
 // Redux Containers
+const StockListContainer = connect(
+    (state) => {
+        return commonMapStateToProps('main', state);
+    },
+    (dispatch, ownProps) => {
+        return commonMapDispatchToProps('main', dispatch, ownProps);
+    }
+)(StockList);
+
 const StockListViewContainer = connect(
     (state) => {
         return {
             stocks: state.stocks,
             query: state.query,
+            dataLoaded: state.base.loaded,
         }
     },
     (dispatch, ownProps) => {
@@ -236,37 +263,44 @@ const StockListViewContainer = connect(
                 dispatch(getActionItem('STOCK_SEARCH', query));
 
                 let firstLetter = query[0];
-                ownProps.enableProgress(true);
+                ownProps.onEnableProgress(true);
                 fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
                     .then((response) => {
-                        ownProps.enableProgress(false);
+                        ownProps.onEnableProgress(false);
                         return response.json();
                     })
                     .then((responseJson) => {
                         let htmlRoot = HTMLParser.parse(responseJson.html);
                         let tdList = htmlRoot.querySelectorAll('table.bm_dataTable tr td');
-                        let stocks = []
+                        let allStocks = [];
+                        let stocks = [];
                         tdList.forEach((o) => {
                             let a = o.querySelector('a');
                             if (a) {
                                 // check if it is the link to the stock code page
                                 if (a.attributes.href.indexOf('stock_code=') >= 0) {
                                     let companyName = a.text.toUpperCase();
+                                    let url = new URL(a.attributes.href);
+                                    let urlQuery = URL.qs.parse(url.query);
+                                    let stockInfo = {
+                                        name: companyName,
+                                        stockCode: urlQuery.stock_code,
+                                    };
+                                    allStocks.push(stockInfo);
+
                                     if (companyName.indexOf(query.toUpperCase()) >= 0) {
-                                        let url = new URL(a.attributes.href);
-                                        let query = URL.qs.parse(url.query);
-                                        stocks.push({
-                                            name: companyName,
-                                            stockCode: query.stock_code,
-                                        })
+                                        stocks.push(stockInfo);
                                     }
                                 }
                             }
                         });
+                        let allStocksData = {};
+                        allStocksData[firstLetter] = allStocks;
+                        dispatch(getActionItem('ALL_STOCKS_LOAD', allStocksData));
                         dispatch(getActionItem('STOCKS_LOAD', stocks));
                     })
                     .catch((error) => {
-                        ownProps.enableProgress(false);
+                        ownProps.onEnableProgress(false);
                     });
             },
             onSelectStock: (stock) => {
@@ -281,6 +315,8 @@ const StockListViewContainer = connect(
 const StockDetailContainer = connect(
     (state) => {
         return {
+            ...commonMapStateToProps('stock_detail', state),
+
             stockName: state.stockDetail.name,
             stockCode: state.stockDetail.stockCode,
             announcements: state.stockDetail.announcements,
@@ -288,34 +324,37 @@ const StockDetailContainer = connect(
     },
     (dispatch, ownProps) => {
         return {
-            onLoadData: (stockCode, component) => {
-                // load the stock detail data
-                component.enableProgress(true);
-                fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + stockCode)
-                    .then((htmlRoot) => {
-                        component.enableProgress(false);
-                        let announcements = []
-                        let trList = htmlRoot.querySelectorAll('table.bm_dataTable tr');
-                        trList.forEach((tr) => {
-                            let tdList = tr.querySelectorAll('td');
-                            if (tdList.length === 4) {
-                                let date = tdList[1].text.trim();
-                                let title = tdList[3].text.replace('  ', ' ').trim();
-                                announcements.push({
-                                    date: date,
-                                    title: title,
+            ...commonMapDispatchToProps('stock_detail', dispatch, ownProps),
+
+            onLoadData: function(stockCode) {
+                return new Promise( (resolve, reject) => {
+                    // load the stock detail data
+                    fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + stockCode)
+                        .then((htmlRoot) => {
+                            let announcements = []
+                            let trList = htmlRoot.querySelectorAll('table.bm_dataTable tr');
+                            trList.forEach((tr) => {
+                                let tdList = tr.querySelectorAll('td');
+                                if (tdList.length === 4) {
+                                    let date = tdList[1].text.trim();
+                                    let title = tdList[3].text.replace('  ', ' ').trim();
+                                    announcements.push({
+                                        date: date,
+                                        title: title,
+                                    })
+                                }
+                            });
+                            dispatch(
+                                getActionItem('STOCK_DETAIL_LOAD', {
+                                    announcements: announcements,
                                 })
-                            }
+                            );
+                            resolve();
+                        })
+                        .catch((error) => {
+                            reject();
                         });
-                        dispatch(
-                            getActionItem('STOCK_DETAIL_LOAD', {
-                                announcements: announcements,
-                            })
-                        );
-                    })
-                    .catch((error) => {
-                        component.enableProgress(false);
-                    });
+                });
             }
         }
     }
@@ -355,12 +394,16 @@ const renderScene = (route, navigator) => {
         navigator.push(getRoute(routeId));
     };
 
+    store.dispatch(getActionItem('CURRENT_ROUTE', route.id));
+    let commonComponentParams = {
+        routeId: route.id,
+    };
     switch (route.id) {
         case 'stock_detail':
-            return <StockDetailContainer />;
+            return <StockDetailContainer {...commonComponentParams} />;
 
         case 'main':
-            return <StockList navigatorGoTo={goTo} />;
+            return <StockListContainer {...commonComponentParams} navigatorGoTo={goTo} />;
     }
 }
 
@@ -402,23 +445,78 @@ const stockDetail = (state={}, action) => {
     }
 }
 
+const allStocks = (state={}, action) => {
+    switch (action.type) {
+        case 'ALL_STOCKS_LOAD':
+            var newState = {
+                ...state,
+                ...action.data,
+            };
+            return newState;
+        default:
+            return state;
+    }
+}
+
+const base = (state = {loaded: false, currentRoute: null}, action) => {
+    switch (action.type) {
+        case storage.LOAD:
+            console.log('LOAD triggered...');
+            return { ...state, loaded: true, showProgress_main: false };
+
+        case storage.SAVE:
+            console.log('SAVE triggered...');
+            return state;
+
+        case 'ENABLE_PROGRESS':
+            let newState = {};
+            newState['showProgress_' + action.data.name] = action.data.flag;
+            return {...state, ...newState};
+
+        case 'CURRENT_ROUTE':
+            return {...state, currentRoute: action.data};
+
+        default:
+            return state;
+    }
+}
+
 const myStocksApp = storage.reducer(combineReducers({
+    base,
     query,
     stocks,
     stockDetail,
+    allStocks,
 }));
 
 // setup persistance for store
 const engine = createEngine('my-stocks-app');
-const middleware = storage.createMiddleware(engine);
+const actionWhitelist = [
+    'ALL_STOCKS_LOAD',
+];
+const middleware = storage.createMiddleware(engine, [], actionWhitelist);
 const createStoreWithMiddleware = applyMiddleware(middleware)(createStore);
 const store = createStoreWithMiddleware(myStocksApp);
 
-const load = storage.createLoader(engine);
-load(store);
 
 // The main entry point
 class MyStocks extends Component {
+    constructor(props) {
+        super(props);
+
+        // trigger progress box,
+        // since there will be some loading and such happening
+        // WARNING: Not sure where is the best place to trigger this event
+        store.dispatch(getActionItem('ENABLE_PROGRESS', {name: 'main', flag: true}));
+    }
+
+    componentDidMount() {
+        // NOTE: Put this code here to test if the load() can be done later,
+        // so that we can show progress, if load() takes time
+        const load = storage.createLoader(engine);
+        load(store);
+    }
+
     render() {
         return (
             <Provider store={store}>
