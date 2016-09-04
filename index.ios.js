@@ -42,8 +42,15 @@ class StockListView extends Component {
                     placeholder="Enter Company Name..."
                     onSubmitEditing={(e) => {
                         let query = e.nativeEvent.text;
-                        if (typeof this.props.onSearch !== 'undefined') {
-                            this.props.onSearch(query);
+                        if (typeof this.props.onSearch === 'function') {
+                            this.props.onEnableProgress(true);
+                            this.props.onSearch(query)
+                                .then(() => {
+                                    this.props.onEnableProgress(false);
+                                })
+                                .catch(() => {
+                                    this.props.onEnableProgress(false);
+                                });
                         }
                     }}
                     style={{
@@ -255,53 +262,55 @@ const StockListViewContainer = connect(
     (dispatch, ownProps) => {
         return {
             onSearch: (query) => {
-                if (query.length <= 0) {
-                    console.log('WARNING: no query, so skip...');
-                    return;
-                }
-                query = query.trim();
-                dispatch(getActionItem('STOCK_SEARCH', query));
+                return new Promise( (resolve, reject) => {
+                    if (query.length <= 0) {
+                        console.log('WARNING: no query, so skip...');
+                        reject();
+                        return;
+                    }
+                    query = query.trim();
+                    dispatch(getActionItem('STOCK_SEARCH', query));
 
-                let firstLetter = query[0];
-                ownProps.onEnableProgress(true);
-                fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
-                    .then((response) => {
-                        ownProps.onEnableProgress(false);
-                        return response.json();
-                    })
-                    .then((responseJson) => {
-                        let htmlRoot = HTMLParser.parse(responseJson.html);
-                        let tdList = htmlRoot.querySelectorAll('table.bm_dataTable tr td');
-                        let allStocks = [];
-                        let stocks = [];
-                        tdList.forEach((o) => {
-                            let a = o.querySelector('a');
-                            if (a) {
-                                // check if it is the link to the stock code page
-                                if (a.attributes.href.indexOf('stock_code=') >= 0) {
-                                    let companyName = a.text.toUpperCase();
-                                    let url = new URL(a.attributes.href);
-                                    let urlQuery = URL.qs.parse(url.query);
-                                    let stockInfo = {
-                                        name: companyName,
-                                        stockCode: urlQuery.stock_code,
-                                    };
-                                    allStocks.push(stockInfo);
+                    let firstLetter = query[0];
+                    fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
+                        .then((response) => {
+                            return response.json();
+                        })
+                        .then((responseJson) => {
+                            let htmlRoot = HTMLParser.parse(responseJson.html);
+                            let tdList = htmlRoot.querySelectorAll('table.bm_dataTable tr td');
+                            let allStocks = [];
+                            let stocks = [];
+                            tdList.forEach((o) => {
+                                let a = o.querySelector('a');
+                                if (a) {
+                                    // check if it is the link to the stock code page
+                                    if (a.attributes.href.indexOf('stock_code=') >= 0) {
+                                        let companyName = a.text.toUpperCase();
+                                        let url = new URL(a.attributes.href);
+                                        let urlQuery = URL.qs.parse(url.query);
+                                        let stockInfo = {
+                                            name: companyName,
+                                            stockCode: urlQuery.stock_code,
+                                        };
+                                        allStocks.push(stockInfo);
 
-                                    if (companyName.indexOf(query.toUpperCase()) >= 0) {
-                                        stocks.push(stockInfo);
+                                        if (companyName.indexOf(query.toUpperCase()) >= 0) {
+                                            stocks.push(stockInfo);
+                                        }
                                     }
                                 }
-                            }
+                            });
+                            let allStocksData = {};
+                            allStocksData[firstLetter] = allStocks;
+                            dispatch(getActionItem('ALL_STOCKS_LOAD', allStocksData));
+                            dispatch(getActionItem('STOCKS_LOAD', stocks));
+                            resolve();
+                        })
+                        .catch((error) => {
+                            reject();
                         });
-                        let allStocksData = {};
-                        allStocksData[firstLetter] = allStocks;
-                        dispatch(getActionItem('ALL_STOCKS_LOAD', allStocksData));
-                        dispatch(getActionItem('STOCKS_LOAD', stocks));
-                    })
-                    .catch((error) => {
-                        ownProps.onEnableProgress(false);
-                    });
+                });
             },
             onSelectStock: (stock) => {
                 dispatch(getActionItem('STOCK_DETAIL_INIT', Object.assign({}, stock)));
