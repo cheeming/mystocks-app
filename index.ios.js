@@ -25,6 +25,8 @@ import URL from 'url-parse';
 
 import * as storage from 'redux-storage';
 import createEngine from 'redux-storage-engine-reactnativeasyncstorage';
+import filter from 'redux-storage-decorator-filter';
+
 
 // Component to show list of stocks
 
@@ -44,7 +46,7 @@ class StockListView extends Component {
                         let query = e.nativeEvent.text;
                         if (typeof this.props.onSearch === 'function') {
                             this.props.onEnableProgress(true);
-                            this.props.onSearch(query)
+                            this.props.onSearch(query, this.props.allStocks)
                                 .then(() => {
                                     this.props.onEnableProgress(false);
                                 })
@@ -257,11 +259,12 @@ const StockListViewContainer = connect(
             stocks: state.stocks,
             query: state.query,
             dataLoaded: state.base.loaded,
+            allStocks: state.allStocks,
         }
     },
     (dispatch, ownProps) => {
         return {
-            onSearch: (query) => {
+            onSearch: (query, allStocksCached) => {
                 return new Promise( (resolve, reject) => {
                     if (query.length <= 0) {
                         console.log('WARNING: no query, so skip...');
@@ -272,15 +275,33 @@ const StockListViewContainer = connect(
                     dispatch(getActionItem('STOCK_SEARCH', query));
 
                     let firstLetter = query[0];
+
+                    let _filterStocks = (_allStocks) => {
+                        // show only results that match query
+                        let stocks = _allStocks.filter( (stockInfo) => {
+                            return stockInfo.name.indexOf(query.toUpperCase()) >= 0;
+                        });
+                        dispatch(getActionItem('STOCKS_LOAD', stocks));
+                    };
+
+                    // search from cache first
+                    if (allStocksCached.hasOwnProperty(firstLetter)) {
+
+                        _filterStocks(allStocksCached[firstLetter]);
+
+                        resolve();
+                        return;
+                    }
+
                     fetch('http://ws.bursamalaysia.com/market/listed-companies/list-of-companies/list_of_companies_f.html?alphabet=' + firstLetter + '&market=main_market')
                         .then((response) => {
                             return response.json();
                         })
                         .then((responseJson) => {
+                            // extract company data from returned HTML
                             let htmlRoot = HTMLParser.parse(responseJson.html);
                             let tdList = htmlRoot.querySelectorAll('table.bm_dataTable tr td');
                             let allStocks = [];
-                            let stocks = [];
                             tdList.forEach((o) => {
                                 let a = o.querySelector('a');
                                 if (a) {
@@ -295,16 +316,15 @@ const StockListViewContainer = connect(
                                         };
                                         allStocks.push(stockInfo);
 
-                                        if (companyName.indexOf(query.toUpperCase()) >= 0) {
-                                            stocks.push(stockInfo);
-                                        }
                                     }
                                 }
                             });
                             let allStocksData = {};
                             allStocksData[firstLetter] = allStocks;
                             dispatch(getActionItem('ALL_STOCKS_LOAD', allStocksData));
-                            dispatch(getActionItem('STOCKS_LOAD', stocks));
+
+                            _filterStocks(allStocks);
+
                             resolve();
                         })
                         .catch((error) => {
@@ -471,6 +491,7 @@ const base = (state = {loaded: false, currentRoute: null}, action) => {
     switch (action.type) {
         case storage.LOAD:
             console.log('LOAD triggered...');
+
             return { ...state, loaded: true, showProgress_main: false };
 
         case storage.SAVE:
@@ -499,11 +520,12 @@ const myStocksApp = storage.reducer(combineReducers({
 }));
 
 // setup persistance for store
-const engine = createEngine('my-stocks-app');
-const actionWhitelist = [
+const engine = filter(createEngine('my-stocks-app'), [
+    'allStocks',
+]);
+const middleware = storage.createMiddleware(engine, [], [
     'ALL_STOCKS_LOAD',
-];
-const middleware = storage.createMiddleware(engine, [], actionWhitelist);
+]);
 const createStoreWithMiddleware = applyMiddleware(middleware)(createStore);
 const store = createStoreWithMiddleware(myStocksApp);
 
