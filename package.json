@@ -9,6 +9,7 @@
     "fast-html-parser": "^1.0.1",
     "react": "15.2.1",
     "react-native": "^0.30.0",
+    "react-native-device-info": "^0.9.5",
     "react-redux": "^4.4.5",
     "redux": "^3.5.2",
     "redux-storage": "^4.1.1",

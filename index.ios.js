@@ -22,6 +22,7 @@ import {
 
 import { createStore, combineReducers, applyMiddleware } from 'redux';
 import { Provider, connect } from 'react-redux';
+import DeviceInfo from 'react-native-device-info';
 
 import HTMLParser from 'fast-html-parser';
 import URL from 'url-parse';
@@ -56,6 +57,39 @@ class StockListView extends Component {
     render() {
         let textInputHeight = 30;
         let fontSize = 18;
+        let listViewComponent = (
+            <View style={{flex: 1, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 8}}>
+                <Text style={{color: '#cccccc'}}>{DeviceInfo.getVersion()} ({DeviceInfo.getBuildNumber()})</Text>
+            </View>
+        );
+        if (Array.isArray(this.props.stocks)) {
+            listViewComponent = (
+                <ListView
+                    enableEmptySections={true}
+                    dataSource={DS.cloneWithRows(this.props.stocks)}
+                    initialListSize={20}
+                    renderRow={(stock) => {
+                        return (
+                            <TouchableHighlight
+                                underlayColor='#dddddd'
+                                onPress={() => { this.props.onSelectStock(stock); }}>
+                                <Text
+                                    style={{
+                                        height: 30,
+                                        padding: 4,
+                                        fontSize
+                                    }}>
+                                    {stock.stockCode}: {stock.name}
+                                </Text>
+                            </TouchableHighlight>
+                        );
+                    }}
+                    style={{
+                        flex: 1,
+                        backgroundColor: '#eeeeee',
+                    }} />
+            );
+        }
         return (
             <View style={{flex: 1, flexDirection: 'column'}}>
                 <TextInput
@@ -83,28 +117,8 @@ class StockListView extends Component {
                         fontSize
                     }}
                     />
-                <ListView
-                    enableEmptySections={true}
-                    dataSource={DS.cloneWithRows(this.props.stocks)}
-                    initialListSize={20}
-                    renderRow={(stock) => {
-                        return (
-                            <TouchableHighlight onPress={() => { this.props.onSelectStock(stock); }}>
-                                <Text
-                                    style={{
-                                        height: 30,
-                                        padding: 4,
-                                        fontSize
-                                    }}>
-                                    {stock.stockCode}: {stock.name}
-                                </Text>
-                            </TouchableHighlight>
-                        );
-                    }}
-                    style={{
-                        flex: 1,
-                        backgroundColor: '#eeeeee',
-                    }} />
+
+                {listViewComponent}
 
             </View>
         );
@@ -216,7 +230,9 @@ class AnnouncementList extends Component {
                 initialListSize={20}
                 renderRow={(announcement) => {
                     return (
-                        <TouchableHighlight onPress={() => { this.onViewDetail(announcement); }}>
+                        <TouchableHighlight
+                            underlayColor='#dddddd'
+                            onPress={() => { this.onViewDetail(announcement); }}>
                             <View style={{flex: 0, flexDirection: 'row', margin: 4}}>
                                 <View style={{width: 100, alignItems: 'center' }}><Text>{announcement.date}</Text></View>
                                 <View style={{flex: 1}}><Text>{announcement.title}</Text></View>
@@ -243,23 +259,55 @@ class AnnouncementDetail extends BaseView {
             <View style={{flex: 1, flexDirection: 'column'}}>
                 <View style={{flex: 0, flexDirection: 'column', alignItems: 'center' }}>
                     <Text style={{fontSize: 12, margin: 2}}>{this.props.date}</Text>
+                </View>
+                <View style={{
+                    flex: 0, flexDirection: 'row',
+                    borderWidth: 1, borderColor: '#cccccc',
+                    borderTopColor: '#999999',
+                    backgroundColor: '#cccccc'}}>
                     <TouchableHighlight
-                        underlayColor='#ffffff'
-                        onPress={this.onOpenAnnouncementUrl.bind(this)}>
-                        <Text style={{
-                            backgroundColor: '#ffffff',
-                            color: '#0645AD',
-                            textDecorationLine: 'underline',
-                            fontSize: 12,
-                            margin: 2,
+                        onPress={() => { this.refs.webview.goBack(); }}
+                        style={{
+                            flex: 1,
+                            height: 22,
+                            justifyContent: 'center',
+                            marginLeft: 4,
+                        }}
+                        underlayColor='#cccccc'>
+                        <Text
+                            style={{
+                                color: '#555555',
+                                fontWeight: 'bold',
+                                alignItems: 'center',
                             }}>
-                            {this.props.title}
+                            &lt; Back
+                        </Text>
+                    </TouchableHighlight>
+
+                    <TouchableHighlight
+                        onPress={this.onOpenAnnouncementUrl.bind(this)}
+                        style={{
+                            flex: 1,
+                            height: 22,
+                            marginRight: 4,
+                            justifyContent: 'center',
+                        }}
+                        underlayColor='#cccccc'>
+                        <Text
+                            style={{
+                                backgroundColor: '#cccccc',
+                                color: '#0645AD',
+                                textDecorationLine: 'underline',
+                                fontSize: 12,
+                                textAlign: 'right',
+                            }}>
+                            Open in Browser
                         </Text>
                     </TouchableHighlight>
                 </View>
                 <WebView style={{
                         flex: 1,
-                        backgroundColor: '#dddddd',
+                        backgroundColor: '#cccccc',
                     }}
                     contentInset={{
                         left: 2, top: 2,
@@ -267,7 +315,7 @@ class AnnouncementDetail extends BaseView {
                     }}
                     source={{uri: this.props.detailUrl}}
                     scalesPageToFit={true}
-
+                    ref='webview'
                     />
             </View>
         );
