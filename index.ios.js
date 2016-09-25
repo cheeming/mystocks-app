@@ -322,6 +322,12 @@ class AnnouncementDetail extends BaseView {
                     }}
                     source={{uri: this.props.detailUrl}}
                     scalesPageToFit={true}
+                    onLoadStart={() => {
+                        this.props.onEnableProgress(true);
+                    }}
+                    onLoadEnd={() => {
+                        this.props.onEnableProgress(false);
+                    }}
                     ref='webview'
                     />
             </View>

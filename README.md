@@ -17,6 +17,10 @@ If you want to try out a Release build, that doesn't depend on React Native Pack
 
 Releases
 --------
+0.5.1 (20160925)
+
+ * Added progress for webview load
+
 0.5 (20160925)
 
  * Added announcement detail page
