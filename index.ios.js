@@ -15,6 +15,9 @@ import {
   Dimensions,
   TouchableHighlight,
   ActivityIndicator,
+  Linking,
+  Alert,
+  WebView,
 } from 'react-native';
 
 import { createStore, combineReducers, applyMiddleware } from 'redux';
@@ -28,15 +31,19 @@ import createEngine from 'redux-storage-engine-reactnativeasyncstorage';
 import filter from 'redux-storage-decorator-filter';
 
 
+// Constants
+const BURSA_WEBSITE_LOC = 'https://www.bursamalaysia.com';
+
+
 // Component to show list of stocks
 
 const DS = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
 
 class StockListView extends Component {
-    componentWillMount() {
+    componentDidMount() {
         if (typeof this.props.onLoadData === 'function') {
             this.props.onEnableProgress(true);
-            this.props.onLoadData()
+            this.props.onLoadData.bind(this)()
                 .then(() => {
                     this.props.onEnableProgress(false);
                 })
@@ -107,8 +114,17 @@ class StockListView extends Component {
 
 // Component used to show details for stocks
 class BaseView extends Component {
-    constructor(props) {
-        super(props);
+    componentDidMount() {
+        if (typeof this.props.onLoadData === 'function') {
+            this.props.onEnableProgress(true);
+            this.props.onLoadData.bind(this)()
+                .then(() => {
+                    this.props.onEnableProgress(false);
+                })
+                .catch(() => {
+                    this.props.onEnableProgress(false);
+                });
+        }
     }
 
     render() {
@@ -164,23 +180,6 @@ class BaseView extends Component {
 
 
 class StockDetail extends BaseView {
-    constructor(props) {
-        super(props);
-    }
-
-    componentDidMount() {
-        if (typeof this.props.onLoadData === 'function') {
-            this.props.onEnableProgress(true);
-            this.props.onLoadData(this.props.stockCode)
-                .then(() => {
-                    this.props.onEnableProgress(false);
-                })
-                .catch(() => {
-                    this.props.onEnableProgress(false);
-                });
-        }
-    }
-
     getTitle() {
         return this.props.stockName;
     }
@@ -191,7 +190,9 @@ class StockDetail extends BaseView {
                 <View style={{flex: 0, flexDirection: 'column', alignItems: 'center' }}>
                     <Text style={{fontSize: 12, margin: 2}}>Stock Code: { this.props.stockCode }</Text>
                 </View>
-                <AnnouncementList announcements={this.props.announcements} />
+                <AnnouncementList
+                    announcements={this.props.announcements}
+                    onViewDetail={this.props.onViewAnnouncementDetail} />
             </View>
         );
     }
@@ -199,6 +200,10 @@ class StockDetail extends BaseView {
 
 
 class AnnouncementList extends Component {
+    onViewDetail(announcement) {
+        this.props.onViewDetail(announcement);
+    }
+
     render() {
         let announcements = this.props.announcements;
         if (typeof announcements === 'undefined') {
@@ -211,10 +216,12 @@ class AnnouncementList extends Component {
                 initialListSize={20}
                 renderRow={(announcement) => {
                     return (
-                        <View style={{flex: 0, flexDirection: 'row', margin: 4}}>
-                            <View style={{width: 100, alignItems: 'center' }}><Text>{announcement.date}</Text></View>
-                            <View style={{flex: 1}}><Text>{announcement.title}</Text></View>
-                        </View>
+                        <TouchableHighlight onPress={() => { this.onViewDetail(announcement); }}>
+                            <View style={{flex: 0, flexDirection: 'row', margin: 4}}>
+                                <View style={{width: 100, alignItems: 'center' }}><Text>{announcement.date}</Text></View>
+                                <View style={{flex: 1}}><Text>{announcement.title}</Text></View>
+                            </View>
+                        </TouchableHighlight>
                     );
                 }}
                 style={{
@@ -223,6 +230,54 @@ class AnnouncementList extends Component {
                 }} />
         );
     }
+}
+
+
+class AnnouncementDetail extends BaseView {
+    getTitle() {
+        return this.props.stockName;
+    }
+
+    getContent() {
+        return (
+            <View style={{flex: 1, flexDirection: 'column'}}>
+                <View style={{flex: 0, flexDirection: 'column', alignItems: 'center' }}>
+                    <Text style={{fontSize: 12, margin: 2}}>{this.props.date}</Text>
+                    <TouchableHighlight
+                        underlayColor='#ffffff'
+                        onPress={this.onOpenAnnouncementUrl.bind(this)}>
+                        <Text style={{
+                            backgroundColor: '#ffffff',
+                            color: '#0645AD',
+                            textDecorationLine: 'underline',
+                            fontSize: 12,
+                            margin: 2,
+                            }}>
+                            {this.props.title}
+                        </Text>
+                    </TouchableHighlight>
+                </View>
+                <WebView style={{
+                        flex: 1,
+                        backgroundColor: '#dddddd',
+                    }}
+                    contentInset={{
+                        left: 2, top: 2,
+                        right: 2, bottom: 2,
+                    }}
+                    source={{uri: this.props.detailUrl}}
+                    scalesPageToFit={true}
+
+                    />
+            </View>
+        );
+    }
+
+    onOpenAnnouncementUrl() {
+        Linking.openURL(this.props.url)
+            .catch((error) => Alert.alert('Error opening link', error));
+    }
+
 }
 
 
@@ -279,7 +334,7 @@ const StockListViewContainer = connect(
         return {
             onLoadData: () => {
                 return new Promise((resolve, reject) => {
-                    let url = 'https://www.bursamalaysia.com/searchbox_data.json';
+                    let url = BURSA_WEBSITE_LOC + '/searchbox_data.json';
                     fetch(url)
                         .then((response) => {
                             return response.json();
@@ -351,10 +406,10 @@ const StockDetailContainer = connect(
         return {
             ...commonMapDispatchToProps('stock_detail', dispatch, ownProps),
 
-            onLoadData: function(stockCode) {
+            onLoadData: function() {
                 return new Promise( (resolve, reject) => {
                     // load the stock detail data
-                    fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + stockCode)
+                    fetchDataWithHtml('http://ws.bursamalaysia.com/market/listed-companies/company-announcements/announcements_listing_f.html?company=' + this.props.stockCode)
                         .then((htmlRoot) => {
                             let announcements = []
                             let trList = htmlRoot.querySelectorAll('table.bm_dataTable tr');
@@ -363,10 +418,9 @@ const StockDetailContainer = connect(
                                 if (tdList.length === 4) {
                                     let date = tdList[1].text.trim();
                                     let title = tdList[3].text.replace('  ', ' ').trim();
-                                    announcements.push({
-                                        date: date,
-                                        title: title,
-                                    })
+                                    let a = tdList[3].querySelector('a');
+                                    let announcementUrl = BURSA_WEBSITE_LOC + a.attributes.href;
+                                    announcements.push({date, title, url: announcementUrl});
                                 }
                             });
                             dispatch(
@@ -380,10 +434,53 @@ const StockDetailContainer = connect(
                             reject();
                         });
                 });
+            },
+
+            onViewAnnouncementDetail: function(announcement) {
+                dispatch(getActionItem('ANNOUNCEMENT_DETAIL_INIT', announcement));
+
+                ownProps.navigatorGoTo('announcement_detail');
+            },
+        }
+    }
+)(StockDetail);
+
+
+const AnnouncementDetailContainer = connect(
+    (state) => {
+        let announcementDetail = state.announcementDetail;
+        return {
+            ...commonMapStateToProps('announcement_detail', state),
+
+            stockName: state.stockDetail.name,
+
+            ...announcementDetail,
+        }
+    },
+    (dispatch, ownProps) => {
+        return {
+            ...commonMapDispatchToProps('announcement_detail', dispatch, ownProps),
+
+            onLoadData: function() {
+                return new Promise((resolve, reject) => {
+                    fetchHtml(this.props.url)
+                        .then((htmlRoot) => {
+                            let iframes = htmlRoot.querySelectorAll('iframe');
+                            if (iframes.length > 0) {
+                                let detailUrl = iframes[0].attributes.src;
+                                dispatch(getActionItem('ANNOUNCEMENT_DETAIL_LOAD', {detailUrl: detailUrl}));
+                            }
+
+                            resolve();
+                        })
+                        .catch((error) => {
+                            reject();
+                        });
+                });
             }
         }
     }
-)(StockDetail)
+)(AnnouncementDetail);
 
 
 // Networking Utilities
@@ -397,6 +494,25 @@ function fetchDataWithHtml(url) {
             })
             .then((responseJson) => {
                 let htmlRoot = HTMLParser.parse(responseJson.html);
+                resolve(htmlRoot);
+            })
+            .catch((error) => {
+                console.log('ERROR: ', url, error);
+                reject(error);
+            });
+    });
+}
+
+function fetchHtml(url) {
+    return new Promise(function(resolve, reject) {
+        console.log('FETCHING: ', url);
+        fetch(url)
+            .then((response) => {
+                console.log('DONE: ', url);
+                return response.text();
+            })
+            .then((responseText) => {
+                let htmlRoot = HTMLParser.parse(responseText);
                 resolve(htmlRoot);
             })
             .catch((error) => {
@@ -425,10 +541,18 @@ const renderScene = (route, navigator) => {
     };
     switch (route.id) {
         case 'stock_detail':
-            return <StockDetailContainer {...commonComponentParams} />;
+            return <StockDetailContainer
+                        navigatorGoTo={goTo}
+                        {...commonComponentParams} />;
+
+        case 'announcement_detail':
+            return <AnnouncementDetailContainer
+                        {...commonComponentParams} />;
 
         case 'main':
-            return <StockListContainer {...commonComponentParams} navigatorGoTo={goTo} />;
+            return <StockListContainer
+                        navigatorGoTo={goTo}
+                        {...commonComponentParams} />;
     }
 }
 
@@ -463,8 +587,25 @@ const stockDetail = (state={}, action) => {
         case 'STOCK_DETAIL_INIT':
             return action.data;
         case 'STOCK_DETAIL_LOAD':
-            state = Object.assign({announcements: action.data.announcements}, state);
+            state = Object.assign({}, state, {announcements: action.data.announcements});
             return state;
+        default:
+            return state;
+    }
+}
+
+let announcementDetailDefault = {
+    date: '',
+    title: '',
+    url: '',
+};
+
+const announcementDetail = (state=Object.assign({}, announcementDetailDefault), action) => {
+    switch (action.type) {
+        case 'ANNOUNCEMENT_DETAIL_INIT':
+            return Object.assign({}, action.data);
+        case 'ANNOUNCEMENT_DETAIL_LOAD':
+            return Object.assign({}, state, action.data);
         default:
             return state;
     }
@@ -512,6 +653,7 @@ const myStocksApp = storage.reducer(combineReducers({
     query,
     stocks,
     stockDetail,
+    announcementDetail,
     allStocks,
 }));
 
