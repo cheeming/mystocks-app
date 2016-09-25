@@ -268,28 +268,35 @@ class AnnouncementDetail extends BaseView {
                     <TouchableHighlight
                         onPress={() => { this.refs.webview.goBack(); }}
                         style={{
-                            flex: 1,
-                            height: 22,
+                            width: 70,
+                            height: 30,
                             justifyContent: 'center',
-                            marginLeft: 4,
                         }}
                         underlayColor='#cccccc'>
                         <Text
                             style={{
                                 color: '#555555',
                                 fontWeight: 'bold',
-                                alignItems: 'center',
+                                textAlign: 'center',
                             }}>
                             &lt; Back
                         </Text>
                     </TouchableHighlight>
 
+                    <View
+                        style={{
+                            flex: 1,
+                        }}>
+                    </View>
+
                     <TouchableHighlight
                         onPress={this.onOpenAnnouncementUrl.bind(this)}
                         style={{
-                            flex: 1,
-                            height: 22,
+                            width: 110,
+                            height: 30,
                             marginRight: 4,
+                            paddingLeft: 4,
+                            paddingRight: 4,
                             justifyContent: 'center',
                         }}
                         underlayColor='#cccccc'>
